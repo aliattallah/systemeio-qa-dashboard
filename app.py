@@ -12,7 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from freescout_bot.qa.storage import SQLiteStorage
 
@@ -24,7 +24,7 @@ st.set_page_config(
     layout="wide",
 )
 
-DB_PATH = Path(__file__).parent / "qa_results.db"
+DB_PATH = Path(__file__).parent.parent / "qa_results.db"
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
@@ -209,47 +209,62 @@ summary["Status"] = summary["Avg_Score"].apply(
     lambda s: "✅ OK" if s >= 6 else "⚠️ Below target"
 )
 
-col_table, col_chart = st.columns([1, 2])
+st.subheader("Agent Rankings")
+st.caption("Scores are averages across all evaluated tickets per agent.")
+st.dataframe(
+    summary[[
+        "Agent", "Tickets", "Avg_Score",
+        "Avg_Accuracy", "Avg_Clarity", "Avg_Tone", "Avg_Completeness",
+        "Status",
+    ]].rename(columns={
+        "Avg_Score":        "Score /10",
+        "Avg_Accuracy":     "Accuracy /3",
+        "Avg_Clarity":      "Clarity /3",
+        "Avg_Tone":         "Tone /2",
+        "Avg_Completeness": "Completeness /2",
+    }),
+    hide_index=True,
+    use_container_width=True,
+    column_config={
+        "Agent":          st.column_config.TextColumn("Agent",         width="medium"),
+        "Tickets":        st.column_config.NumberColumn("Tickets",     width="small", format="%d"),
+        "Score /10":      st.column_config.NumberColumn("Score /10",   width="small"),
+        "Accuracy /3":    st.column_config.NumberColumn("Accuracy /3", width="small"),
+        "Clarity /3":     st.column_config.NumberColumn("Clarity /3",  width="small"),
+        "Tone /2":        st.column_config.NumberColumn("Tone /2",     width="small"),
+        "Completeness /2":st.column_config.NumberColumn("Comp /2",     width="small"),
+        "Status":         st.column_config.TextColumn("Status",        width="small"),
+    },
+)
 
-with col_table:
-    st.subheader("Agent Rankings")
-    st.caption("Scores are averages across all evaluated tickets per agent.")
-    st.dataframe(
-        summary[[
-            "Agent", "Tickets", "Avg_Score",
-            "Avg_Accuracy", "Avg_Clarity", "Avg_Tone", "Avg_Completeness",
-            "Status",
-        ]].rename(columns={
-            "Avg_Score":        "Score /10",
-            "Avg_Accuracy":     "Accuracy /3",
-            "Avg_Clarity":      "Clarity /3",
-            "Avg_Tone":         "Tone /2",
-            "Avg_Completeness": "Completeness /2",
-        }),
-        width="stretch",
-        hide_index=True,
-    )
+st.divider()
 
-with col_chart:
-    st.subheader("Score Breakdown by Agent")
-    breakdown = summary[
-        ["Agent", "Avg_Accuracy", "Avg_Clarity", "Avg_Tone", "Avg_Completeness"]
-    ].melt(id_vars="Agent", var_name="Dimension", value_name="Score")
-    breakdown["Dimension"] = breakdown["Dimension"].str.replace("Avg_", "", regex=False)
+st.subheader("Score Breakdown by Agent")
+st.caption("Top 20 agents by score — use the Agent filter in the sidebar to focus on specific agents.")
+top20 = summary.head(20)
+breakdown = top20[
+    ["Agent", "Avg_Accuracy", "Avg_Clarity", "Avg_Tone", "Avg_Completeness"]
+].melt(id_vars="Agent", var_name="Dimension", value_name="Score")
+breakdown["Dimension"] = breakdown["Dimension"].str.replace("Avg_", "", regex=False)
 
-    fig = px.bar(
-        breakdown,
-        x="Agent", y="Score", color="Dimension",
-        barmode="group",
-        color_discrete_map={
-            "Accuracy":     "#4C9BE8",
-            "Clarity":      "#5BC4A0",
-            "Tone":         "#F5A623",
-            "Completeness": "#E86B6B",
-        },
-    )
-    fig.update_layout(margin=dict(t=10, b=10), legend_title="")
-    st.plotly_chart(fig, width="stretch")
+fig = px.bar(
+    breakdown,
+    x="Agent", y="Score", color="Dimension",
+    barmode="group",
+    color_discrete_map={
+        "Accuracy":     "#4C9BE8",
+        "Clarity":      "#5BC4A0",
+        "Tone":         "#F5A623",
+        "Completeness": "#E86B6B",
+    },
+)
+fig.update_layout(
+    margin=dict(t=10, b=120),
+    legend_title="",
+    xaxis_tickangle=-35,
+    height=420,
+)
+st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
