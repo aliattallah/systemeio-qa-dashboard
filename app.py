@@ -12,7 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
 
 from freescout_bot.qa.storage import SQLiteStorage
 
@@ -24,7 +24,7 @@ st.set_page_config(
     layout="wide",
 )
 
-DB_PATH = Path(__file__).parent.parent / "qa_results.db"
+DB_PATH = Path(__file__).parent / "qa_results.db"
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 
