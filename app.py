@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1
 
 import sqlite3
 
@@ -20,6 +21,17 @@ st.set_page_config(
     page_icon="📊",
     layout="wide",
 )
+
+# Prevent Streamlit's built-in 'C' shortcut from hijacking Cmd/Ctrl+C (copy)
+st.components.v1.html("""
+<script>
+document.addEventListener('keydown', function(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        e.stopImmediatePropagation();
+    }
+}, true);
+</script>
+""", height=0)
 
 DB_PATH = Path(__file__).parent / "qa_results.db"
 
