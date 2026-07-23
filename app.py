@@ -46,7 +46,7 @@ if df.empty:
     st.stop()
 
 # Filter out system/automation accounts
-df = df[~df["agent_name"].isin(["Workflow", "John Louise Reglos", "Jack Won"])]
+df = df[df["agent_name"] != "Workflow"]
 
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 
