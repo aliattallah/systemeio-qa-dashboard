@@ -45,6 +45,9 @@ if df.empty:
     st.warning("Database exists but has no records yet.")
     st.stop()
 
+# Filter out system/automation accounts
+df = df[~df["agent_name"].isin(["Workflow", "John Louise Reglos", "Jack Won"])]
+
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 
 with st.sidebar:
@@ -458,9 +461,16 @@ st.dataframe(table_display, hide_index=True, use_container_width=True, column_co
 
 # AI Feedback shown as clean cards below the table
 st.markdown("#### 💬 AI Feedback")
-st.caption("Showing all tickets sorted by score (worst first).")
 
-for _, row in display.iterrows():
+PAGE_SIZE = 50
+total_tickets = len(display)
+total_pages   = max(1, (total_tickets + PAGE_SIZE - 1) // PAGE_SIZE)
+page = st.number_input("Page", min_value=1, max_value=total_pages, value=1, step=1)
+st.caption(f"Showing {PAGE_SIZE} tickets per page · {total_tickets} total · Page {page}/{total_pages} (sorted worst first)")
+
+page_display = display.iloc[(page - 1) * PAGE_SIZE : page * PAGE_SIZE]
+
+for _, row in page_display.iterrows():
     score = round(float(row["total_score"]), 1)
     topic_label = f" · {row['topic']}" if "topic" in row and pd.notna(row.get("topic")) else ""
     with st.expander(
