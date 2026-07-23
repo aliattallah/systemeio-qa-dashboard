@@ -4,7 +4,6 @@ QA Dashboard — run with:  streamlit run scripts/qa_dashboard.py
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -293,7 +292,7 @@ if weekly["Week"].nunique() >= 2:
         annotation_position="bottom right",
     )
     fig_trend.update_layout(margin=dict(t=10, b=10), legend_title="", yaxis_range=[0, 10])
-    st.plotly_chart(fig_trend, width="stretch")
+    st.plotly_chart(fig_trend, use_container_width=True)
 else:
     st.info("Need data from at least 2 different weeks to show trends.")
 
@@ -339,7 +338,7 @@ if not filtered.empty:
             yaxis_title="% of tickets",
             yaxis_range=[0, 100],
         )
-        st.plotly_chart(fig_pattern, width="stretch")
+        st.plotly_chart(fig_pattern, use_container_width=True)
 
     with col_dim_avg:
         st.markdown("**Team dimension averages (out of 10)**")
@@ -370,7 +369,7 @@ if not filtered.empty:
             margin=dict(t=30, b=30),
             showlegend=False,
         )
-        st.plotly_chart(fig_radar, width="stretch")
+        st.plotly_chart(fig_radar, use_container_width=True)
 
     # Coaching recommendations based on patterns
     st.markdown("**Coaching recommendations**")
@@ -401,7 +400,7 @@ with col_hist:
         title="All Tickets",
     )
     fig_hist.update_layout(margin=dict(t=40, b=10), bargap=0.1)
-    st.plotly_chart(fig_hist, width="stretch")
+    st.plotly_chart(fig_hist, use_container_width=True)
 
 with col_box:
     fig_box = px.box(
@@ -413,7 +412,7 @@ with col_box:
     )
     fig_box.update_layout(margin=dict(t=40, b=10), showlegend=False)
     fig_box.add_hline(y=6, line_dash="dash", line_color="red", annotation_text="Target")
-    st.plotly_chart(fig_box, width="stretch")
+    st.plotly_chart(fig_box, use_container_width=True)
 
 st.divider()
 
@@ -519,7 +518,7 @@ if not rated.empty:
             },
         )
         fig_pie.update_layout(margin=dict(t=10, b=10))
-        st.plotly_chart(fig_pie, width="stretch")
+        st.plotly_chart(fig_pie, use_container_width=True)
 
         invalid_pct = round(
             len(rated[rated["rating_verdict"] == "Invalid"]) / len(rated) * 100, 1
@@ -539,6 +538,6 @@ if not rated.empty:
                 "rating_verdict":  "Verdict",
                 "rating_feedback": "Reason",
             }),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
