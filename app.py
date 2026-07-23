@@ -45,8 +45,9 @@ if df.empty:
     st.warning("Database exists but has no records yet.")
     st.stop()
 
-# Filter out system/automation accounts
-df = df[df["agent_name"] != "Workflow"]
+# Filter out system/automation and non-support accounts
+EXCLUDED_AGENTS = {"Workflow", "Khaled Behloul", "Khaled Aissani"}
+df = df[~df["agent_name"].isin(EXCLUDED_AGENTS)]
 
 # ── Sidebar filters ───────────────────────────────────────────────────────────
 
