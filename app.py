@@ -12,9 +12,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from freescout_bot.qa.storage import SQLiteStorage
+import sqlite3
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -30,8 +28,11 @@ DB_PATH = Path(__file__).parent / "qa_results.db"
 
 @st.cache_data(ttl=60)
 def load_data() -> pd.DataFrame:
-    storage = SQLiteStorage(DB_PATH)
-    return storage.load_dataframe()
+    with sqlite3.connect(DB_PATH) as conn:
+        df = pd.read_sql("SELECT * FROM scored_tickets ORDER BY run_date DESC", conn)
+    df["run_date"] = pd.to_datetime(df["run_date"])
+    df["week"]     = df["run_date"].dt.strftime("%Y-W%W")
+    return df
 
 
 if not DB_PATH.exists():
@@ -133,13 +134,13 @@ if len(weekly_avg) >= 2:
 
 # -- Most common weakest area across all filtered tickets
 def _weakest_for_row(row: pd.Series) -> str:
-    ratios = {
-        "Accuracy":     row["accuracy"]     / 3,
-        "Clarity":      row["clarity"]      / 3,
-        "Tone":         row["tone"]         / 2,
-        "Completeness": row["completeness"] / 2,
+    areas = {
+        "Accuracy":     row["accuracy"],
+        "Clarity":      row["clarity"],
+        "Tone":         row["tone"],
+        "Completeness": row["completeness"] if pd.notna(row["completeness"]) else 10,
     }
-    return min(ratios, key=ratios.get)
+    return min(areas, key=areas.get)
 
 if not filtered.empty:
     filtered["_weakest"] = filtered.apply(_weakest_for_row, axis=1)
@@ -193,12 +194,12 @@ st.divider()
 summary = (
     filtered.groupby("agent_name")
     .agg(
-        Tickets=         ("total_score",  "count"),
-        Avg_Score=       ("total_score",  "mean"),
-        Avg_Accuracy=    ("accuracy",     "mean"),
-        Avg_Clarity=     ("clarity",      "mean"),
-        Avg_Tone=        ("tone",         "mean"),
-        Avg_Completeness=("completeness", "mean"),
+        Tickets=          ("total_score",   "count"),
+        Avg_Score=        ("total_score",   "mean"),
+        Avg_Accuracy=     ("accuracy",      "mean"),
+        Avg_Clarity=      ("clarity",       "mean"),
+        Avg_Tone=         ("tone",          "mean"),
+        Avg_Completeness= ("completeness",  "mean"),
     )
     .round(2)
     .sort_values("Avg_Score", ascending=False)
@@ -210,7 +211,7 @@ summary["Status"] = summary["Avg_Score"].apply(
 )
 
 st.subheader("Agent Rankings")
-st.caption("Scores are averages across all evaluated tickets per agent.")
+st.caption("All scores out of 10. Averages across all evaluated tickets per agent.")
 st.dataframe(
     summary[[
         "Agent", "Tickets", "Avg_Score",
@@ -218,22 +219,22 @@ st.dataframe(
         "Status",
     ]].rename(columns={
         "Avg_Score":        "Score /10",
-        "Avg_Accuracy":     "Accuracy /3",
-        "Avg_Clarity":      "Clarity /3",
-        "Avg_Tone":         "Tone /2",
-        "Avg_Completeness": "Completeness /2",
+        "Avg_Accuracy":     "Accuracy /10",
+        "Avg_Clarity":      "Clarity /10",
+        "Avg_Tone":         "Tone /10",
+        "Avg_Completeness": "Completeness /10",
     }),
     hide_index=True,
     use_container_width=True,
     column_config={
-        "Agent":          st.column_config.TextColumn("Agent",         width="medium"),
-        "Tickets":        st.column_config.NumberColumn("Tickets",     width="small", format="%d"),
-        "Score /10":      st.column_config.NumberColumn("Score /10",   width="small"),
-        "Accuracy /3":    st.column_config.NumberColumn("Accuracy /3", width="small"),
-        "Clarity /3":     st.column_config.NumberColumn("Clarity /3",  width="small"),
-        "Tone /2":        st.column_config.NumberColumn("Tone /2",     width="small"),
-        "Completeness /2":st.column_config.NumberColumn("Comp /2",     width="small"),
-        "Status":         st.column_config.TextColumn("Status",        width="small"),
+        "Agent":            st.column_config.TextColumn("Agent",           width="medium"),
+        "Tickets":          st.column_config.NumberColumn("Tickets",       width="small", format="%d"),
+        "Score /10":        st.column_config.NumberColumn("Score /10",     width="small"),
+        "Accuracy /10":     st.column_config.NumberColumn("Accuracy /10",  width="small"),
+        "Clarity /10":      st.column_config.NumberColumn("Clarity /10",   width="small"),
+        "Tone /10":         st.column_config.NumberColumn("Tone /10",      width="small"),
+        "Completeness /10": st.column_config.NumberColumn("Comp /10",      width="small"),
+        "Status":           st.column_config.TextColumn("Status",          width="small"),
     },
 )
 
@@ -341,12 +342,12 @@ if not filtered.empty:
         st.plotly_chart(fig_pattern, width="stretch")
 
     with col_dim_avg:
-        st.markdown("**Team dimension averages (normalised to 10)**")
+        st.markdown("**Team dimension averages (out of 10)**")
         dim_avgs = {
-            "Accuracy":     filtered["accuracy"].mean()     / 3 * 10,
-            "Clarity":      filtered["clarity"].mean()      / 3 * 10,
-            "Tone":         filtered["tone"].mean()         / 2 * 10,
-            "Completeness": filtered["completeness"].mean() / 2 * 10,
+            "Accuracy":     filtered["accuracy"].mean(),
+            "Clarity":      filtered["clarity"].mean(),
+            "Tone":         filtered["tone"].mean(),
+            "Completeness": filtered["completeness"].mean(),
         }
         dim_df = pd.DataFrame(
             list(dim_avgs.items()), columns=["Dimension", "Score (out of 10)"]
@@ -421,53 +422,76 @@ st.divider()
 st.subheader("Ticket Details")
 st.caption("Each row is one individual ticket. Scores here are per-ticket, not averages.")
 
-display = filtered[[
-    "run_date", "ticket_number", "mailbox_name", "agent_name",
-    "total_score", "accuracy", "clarity", "tone", "completeness", "feedback",
-]].copy()
+display_cols = ["run_date", "ticket_number", "mailbox_name", "agent_name", "total_score",
+                "accuracy", "clarity", "tone", "completeness", "feedback"]
+if "topic" in filtered.columns:
+    display_cols.insert(4, "topic")
+if "topic_variety" in filtered.columns:
+    display_cols.append("topic_variety")
+
+display = filtered[display_cols].copy()
 display["run_date"] = display["run_date"].dt.strftime("%Y-%m-%d")
 display = display.sort_values("total_score", ascending=True)
 
 table_display = display.drop(columns=["feedback"]).copy()
-table_display.columns = [
-    "Date", "Ticket #", "Mailbox", "Agent",
-    "Score /10", "Acc /3", "Clar /3", "Tone /2", "Comp /2",
-]
+col_rename = {
+    "run_date": "Date", "ticket_number": "Ticket #", "mailbox_name": "Mailbox",
+    "agent_name": "Agent", "total_score": "Score /10",
+    "accuracy": "Acc /10", "clarity": "Clar /10", "tone": "Tone /10",
+    "completeness": "Comp /10", "topic": "Topic", "topic_variety": "Variety /10",
+}
+table_display = table_display.rename(columns=col_rename)
 
-st.dataframe(
-    table_display,
-    hide_index=True,
-    use_container_width=True,
-    column_config={
-        "Date":       st.column_config.TextColumn("Date",      width="small"),
-        "Ticket #":   st.column_config.TextColumn("Ticket #",  width="small"),
-        "Mailbox":    st.column_config.TextColumn("Mailbox",   width="small"),
-        "Agent":      st.column_config.TextColumn("Agent",     width="medium"),
-        "Score /10":  st.column_config.NumberColumn("Score /10", width="small", format="%d"),
-        "Acc /3":     st.column_config.NumberColumn("Acc /3",    width="small", format="%d"),
-        "Clar /3":    st.column_config.NumberColumn("Clar /3",   width="small", format="%d"),
-        "Tone /2":    st.column_config.NumberColumn("Tone /2",   width="small", format="%d"),
-        "Comp /2":    st.column_config.NumberColumn("Comp /2",   width="small", format="%d"),
-    },
-)
+col_config = {
+    "Date":         st.column_config.TextColumn("Date",        width="small"),
+    "Ticket #":     st.column_config.TextColumn("Ticket #",    width="small"),
+    "Mailbox":      st.column_config.TextColumn("Mailbox",     width="small"),
+    "Topic":        st.column_config.TextColumn("Topic",       width="small"),
+    "Agent":        st.column_config.TextColumn("Agent",       width="medium"),
+    "Score /10":    st.column_config.NumberColumn("Score /10", width="small"),
+    "Acc /10":      st.column_config.NumberColumn("Acc /10",   width="small", format="%d"),
+    "Clar /10":     st.column_config.NumberColumn("Clar /10",  width="small", format="%d"),
+    "Tone /10":     st.column_config.NumberColumn("Tone /10",  width="small", format="%d"),
+    "Comp /10":     st.column_config.NumberColumn("Comp /10",  width="small", format="%d"),
+    "Variety /10":  st.column_config.NumberColumn("Variety",   width="small", format="%d"),
+}
+st.dataframe(table_display, hide_index=True, use_container_width=True, column_config=col_config)
 
 # AI Feedback shown as clean cards below the table
 st.markdown("#### 💬 AI Feedback")
 st.caption("Showing all tickets sorted by score (worst first).")
 
 for _, row in display.iterrows():
-    score = int(row["total_score"])
-    color = "#E86B6B" if score < 6 else "#F5A623" if score < 8 else "#5BC4A0"
+    score = round(float(row["total_score"]), 1)
+    topic_label = f" · {row['topic']}" if "topic" in row and pd.notna(row.get("topic")) else ""
     with st.expander(
         f"**{row['agent_name']}** — Ticket #{row['ticket_number']} — "
-        f"Score: {score}/10 · {row['mailbox_name']} · {row['run_date']}"
+        f"Score: {score}/10{topic_label} · {row['mailbox_name']} · {row['run_date']}"
     ):
         cols = st.columns(5)
         cols[0].metric("Score",        f"{score}/10")
-        cols[1].metric("Accuracy",     f"{int(row['accuracy'])}/3")
-        cols[2].metric("Clarity",      f"{int(row['clarity'])}/3")
-        cols[3].metric("Tone",         f"{int(row['tone'])}/2")
-        cols[4].metric("Completeness", f"{int(row['completeness'])}/2")
+        cols[1].metric("Accuracy",     f"{int(row['accuracy'])}/10")
+        cols[2].metric("Clarity",      f"{int(row['clarity'])}/10")
+        cols[3].metric("Tone",         f"{int(row['tone'])}/10")
+        comp_val = row.get("completeness")
+        cols[4].metric("Completeness", f"{int(comp_val)}/10" if pd.notna(comp_val) else "N/A")
+
+        if "topic_variety" in row and pd.notna(row.get("topic_variety")):
+            st.caption(f"Topic Variety: {int(row['topic_variety'])}/10")
+
+        detail_rows = [
+            ("Accuracy",     row.get("accuracy_note",      "")),
+            ("Clarity",      row.get("clarity_note",       "")),
+            ("Tone",         row.get("tone_note",          "")),
+            ("Completeness", row.get("completeness_note",  "")),
+        ]
+        if "topic_variety_note" in row and pd.notna(row.get("topic_variety_note")):
+            detail_rows.append(("Topic Variety", row.get("topic_variety_note", "")))
+
+        for label, note in detail_rows:
+            if note and note != "N/A":
+                st.markdown(f"**{label}:** {note}")
+
         st.info(row["feedback"])
 
 # ── Customer rating validation ────────────────────────────────────────────────
