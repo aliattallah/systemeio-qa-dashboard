@@ -516,51 +516,58 @@ for _, row in page_display.iterrows():
 
         st.info(row["feedback"])
 
-# ── Customer rating validation ────────────────────────────────────────────────
+# ── Resolution Verdict ────────────────────────────────────────────────────────
 
-rated = filtered[
-    filtered["rating_verdict"].notna() & (filtered["rating_verdict"] != "")
-]
+if "resolution_verdict" in filtered.columns:
+    resolved = filtered[
+        filtered["resolution_verdict"].notna() & (filtered["resolution_verdict"] != "")
+    ]
 
-if not rated.empty:
-    st.divider()
-    st.subheader("⭐ Customer Rating Validation")
+    if not resolved.empty:
+        st.divider()
+        st.subheader("✅ Resolution Verdict")
+        st.caption("AI assessment of whether each ticket's issue was ultimately resolved. One verdict per conversation.")
 
-    col_pie, col_detail = st.columns([1, 2])
+        # Deduplicate by conv_id so multi-agent tickets count once
+        resolved_dedup = resolved.drop_duplicates(subset=["conv_id"])
 
-    with col_pie:
-        verdict_counts = rated["rating_verdict"].value_counts().reset_index()
-        verdict_counts.columns = ["Verdict", "Count"]
-        fig_pie = px.pie(
-            verdict_counts, names="Verdict", values="Count",
-            color="Verdict",
-            color_discrete_map={
-                "Valid":   "#5BC4A0",
-                "Invalid": "#E86B6B",
-                "Unclear": "#F5A623",
-            },
-        )
-        fig_pie.update_layout(margin=dict(t=10, b=10))
-        st.plotly_chart(fig_pie, use_container_width=True)
+        col_pie, col_detail = st.columns([1, 2])
 
-        invalid_pct = round(
-            len(rated[rated["rating_verdict"] == "Invalid"]) / len(rated) * 100, 1
-        )
-        if invalid_pct >= 20:
-            st.warning(f"⚠️ {invalid_pct}% of customer ratings appear biased or invalid.")
+        with col_pie:
+            verdict_counts = resolved_dedup["resolution_verdict"].value_counts().reset_index()
+            verdict_counts.columns = ["Verdict", "Count"]
+            fig_pie = px.pie(
+                verdict_counts, names="Verdict", values="Count",
+                color="Verdict",
+                color_discrete_map={
+                    "Resolved":           "#5BC4A0",
+                    "Partially Resolved": "#F5A623",
+                    "Unresolved":         "#E86B6B",
+                    "Escalated":          "#4C9BE8",
+                    "Unclear":            "#AAAAAA",
+                },
+            )
+            fig_pie.update_layout(margin=dict(t=10, b=10))
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-    with col_detail:
-        st.dataframe(
-            rated[[
-                "ticket_number", "agent_name", "customer_rating",
-                "rating_verdict", "rating_feedback",
-            ]].rename(columns={
-                "ticket_number":   "Ticket #",
-                "agent_name":      "Agent",
-                "customer_rating": "Rating",
-                "rating_verdict":  "Verdict",
-                "rating_feedback": "Reason",
-            }),
-            use_container_width=True,
-            hide_index=True,
-        )
+            unresolved_pct = round(
+                len(resolved_dedup[resolved_dedup["resolution_verdict"] == "Unresolved"])
+                / len(resolved_dedup) * 100, 1
+            )
+            if unresolved_pct >= 15:
+                st.warning(f"⚠️ {unresolved_pct}% of tickets appear unresolved.")
+
+        with col_detail:
+            st.dataframe(
+                resolved_dedup[[
+                    "ticket_number", "agent_name",
+                    "resolution_verdict", "resolution_reason",
+                ]].rename(columns={
+                    "ticket_number":      "Ticket #",
+                    "agent_name":         "Agent",
+                    "resolution_verdict": "Verdict",
+                    "resolution_reason":  "Reason",
+                }),
+                use_container_width=True,
+                hide_index=True,
+            )
