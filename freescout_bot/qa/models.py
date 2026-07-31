@@ -6,34 +6,42 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class QAScore:
-    accuracy:     int
-    clarity:      int
-    tone:         int
-    completeness: int
-    total_score:  int
-    feedback:     str
+    # All criteria scored 0-10
+    accuracy:          int
+    clarity:           int
+    tone:              int
+    completeness:      int | None   # None = N/A (abusive/spam message)
+    topic_variety:     int | None   # None = N/A (single-topic ticket)
+    topic:             str          # e.g. "Billing", "Technical/Bug"
+    accuracy_note:     str
+    clarity_note:      str
+    tone_note:         str
+    completeness_note: str
+    topic_variety_note: str
+    total_score:       float        # average of applicable criteria
+    feedback:          str
 
 
 @dataclass(frozen=True)
-class RatingValidation:
-    verdict: str  # "Valid" | "Invalid" | "Unclear"
+class ResolutionVerdict:
+    verdict: str  # "Resolved" | "Partially Resolved" | "Unresolved" | "Escalated" | "Unclear"
     reason:  str
 
 
 @dataclass
 class ScoredTicket:
-    conv_id:           int
-    ticket_number:     str
-    mailbox_id:        int
-    mailbox_name:      str
-    agent_id:          int
-    agent_name:        str
-    customer_message:  str
-    agent_reply:       str
-    score:             QAScore
-    evaluated_at:      datetime
-    customer_rating:   int | None              = None
-    rating_validation: RatingValidation | None = None
+    conv_id:            int
+    ticket_number:      str
+    mailbox_id:         int
+    mailbox_name:       str
+    agent_id:           int
+    agent_name:         str
+    customer_message:   str
+    agent_reply:        str
+    score:              QAScore
+    evaluated_at:       datetime
+    conv_date:          str = ""          # conversation createdAt date (YYYY-MM-DD)
+    resolution_verdict: ResolutionVerdict | None = None
 
 
 @dataclass

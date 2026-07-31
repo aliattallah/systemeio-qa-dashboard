@@ -43,6 +43,8 @@ def load_data() -> pd.DataFrame:
         df = pd.read_sql("SELECT * FROM scored_tickets ORDER BY run_date DESC", conn)
     df["run_date"] = pd.to_datetime(df["run_date"])
     df["week"]     = df["run_date"].dt.strftime("%Y-W%W")
+    if "conv_date" in df.columns:
+        df["conv_date"] = pd.to_datetime(df["conv_date"], errors="coerce")
     return df
 
 
@@ -58,7 +60,12 @@ if df.empty:
     st.stop()
 
 # Filter out system/automation and non-support accounts
-EXCLUDED_AGENTS = {"Workflow", "Khaled Behloul", "Khaled Aissani"}
+EXCLUDED_AGENTS = {
+    "Workflow", "Khaled Behloul", "Khaled Aissani",
+    "Hadjila Chiki", "Hadjila Chikhi",
+    "Amine Ahmane", "Cristian G", "Karima Ait Said",
+    "Nataly A.", "Koceila Larab", "koceila Larab",
+}
 df = df[~df["agent_name"].isin(EXCLUDED_AGENTS)]
 
 # ── Sidebar filters ───────────────────────────────────────────────────────────
@@ -72,8 +79,9 @@ with st.sidebar:
     sel_agent   = st.selectbox("Agent",   agents)
     sel_mailbox = st.selectbox("Mailbox", mailboxes)
 
-    min_date   = df["run_date"].min().date()
-    max_date   = df["run_date"].max().date()
+    date_col   = "conv_date" if "conv_date" in df.columns else "run_date"
+    min_date   = df[date_col].min().date()
+    max_date   = df[date_col].max().date()
     date_range = st.date_input("Date range", value=(min_date, max_date))
 
     min_score = st.slider("Min score", 0, 10, 0)
@@ -93,8 +101,8 @@ if sel_mailbox != "All":
     filtered = filtered[filtered["mailbox_name"] == sel_mailbox]
 if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
     filtered = filtered[
-        (filtered["run_date"] >= pd.Timestamp(date_range[0])) &
-        (filtered["run_date"] <= pd.Timestamp(date_range[1]))
+        (filtered[date_col] >= pd.Timestamp(date_range[0])) &
+        (filtered[date_col] <= pd.Timestamp(date_range[1]))
     ]
 filtered = filtered[filtered["total_score"] >= min_score]
 
@@ -437,7 +445,8 @@ st.divider()
 st.subheader("Ticket Details")
 st.caption("Each row is one individual ticket. Scores here are per-ticket, not averages.")
 
-display_cols = ["run_date", "ticket_number", "mailbox_name", "agent_name", "total_score",
+_date_display = "conv_date" if "conv_date" in filtered.columns else "run_date"
+display_cols = [_date_display, "ticket_number", "mailbox_name", "agent_name", "total_score",
                 "accuracy", "clarity", "tone", "completeness", "feedback"]
 if "topic" in filtered.columns:
     display_cols.insert(4, "topic")
@@ -445,12 +454,12 @@ if "topic_variety" in filtered.columns:
     display_cols.append("topic_variety")
 
 display = filtered[display_cols].copy()
-display["run_date"] = display["run_date"].dt.strftime("%Y-%m-%d")
+display[_date_display] = display[_date_display].dt.strftime("%Y-%m-%d")
 display = display.sort_values("total_score", ascending=True)
 
 table_display = display.drop(columns=["feedback"]).copy()
 col_rename = {
-    "run_date": "Date", "ticket_number": "Ticket #", "mailbox_name": "Mailbox",
+    _date_display: "Date", "ticket_number": "Ticket #", "mailbox_name": "Mailbox",
     "agent_name": "Agent", "total_score": "Score /10",
     "accuracy": "Acc /10", "clarity": "Clar /10", "tone": "Tone /10",
     "completeness": "Comp /10", "topic": "Topic", "topic_variety": "Variety /10",
@@ -488,7 +497,7 @@ for _, row in page_display.iterrows():
     topic_label = f" · {row['topic']}" if "topic" in row and pd.notna(row.get("topic")) else ""
     with st.expander(
         f"**{row['agent_name']}** — Ticket #{row['ticket_number']} — "
-        f"Score: {score}/10{topic_label} · {row['mailbox_name']} · {row['run_date']}"
+        f"Score: {score}/10{topic_label} · {row['mailbox_name']} · {row[_date_display]}"
     ):
         cols = st.columns(5)
         cols[0].metric("Score",        f"{score}/10")

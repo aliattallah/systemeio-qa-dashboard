@@ -50,6 +50,25 @@ WARNINGS_HEADERS = [
 
 BOT_USER_ID = 23
 
+# Agents excluded from QA scoring (system accounts, migration team, etc.)
+EXCLUDED_AGENT_NAMES: set[str] = {
+    "Workflow",
+    "Khaled Behloul",
+    "Khaled Aissani",
+    "Hadjila Chiki",
+    "Hadjila Chikhi",
+    "Amine Ahmane",
+    "Cristian G",
+    "Karima Ait Said",
+    "Nataly A.",
+    "Koceila Larab",
+    "koceila Larab",
+}
+
+# Max conversations fetched per mailbox — prevents large mailboxes (English)
+# from dominating and ensures all mailboxes are represented
+MAX_CONVS_PER_MAILBOX = 3000
+
 MAILBOX_NAMES: dict[int, str] = {
     3:  "English",
     16: "Spanish",
@@ -67,12 +86,13 @@ ALL_MAILBOX_IDS: list[int] = list(MAILBOX_NAMES.keys())
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 SCORE_MAXIMUMS: dict[str, int] = {
-    "accuracy":     3,
-    "clarity":      3,
-    "tone":         2,
-    "completeness": 2,
+    "accuracy":     10,
+    "clarity":      10,
+    "tone":         10,
+    "completeness": 10,
+    "topic_variety": 10,
 }
 
 TARGET_MIN_SCORE       = 6.0
 WARNING_DROP_THRESHOLD = 1.5
-MAX_MESSAGE_LENGTH     = 2000
+MAX_MESSAGE_LENGTH     = 6000
