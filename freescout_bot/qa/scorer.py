@@ -150,6 +150,7 @@ EVALUATION RULES:
 - If the agent sent multiple replies (labeled [Reply 1 of N], [Reply 2 of N], etc.), evaluate each one in the context of where it appeared in the conversation — they are separate messages sent at different times, not one combined response.
 - If the ticket required an escalation (e.g., refund approval, bug report, account deletion) and the agent correctly escalated rather than trying to solve it themselves, treat that as full marks on Accuracy.
 - If the customer's message is abusive, off-topic, spam, or nonsensical, evaluate only whether the agent handled it professionally; set completeness and topic_variety to null and explain in the note.
+- If a customer message contains only a quoted email header with no actual content (e.g. "Le ... a écrit :", "On ... wrote:", or similar), treat this as MISSING CONTEXT — the customer's actual reply was not captured. Do NOT penalize the agent for anything that could be explained by the invisible customer message. Note the missing context in your feedback.
 
 SCORING CRITERIA (all 0-10):
 
